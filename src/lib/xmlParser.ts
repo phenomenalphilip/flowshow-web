@@ -51,35 +51,45 @@ function normalizeXmlToZefania(xmlText: string): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, 'text/xml');
   
-  // If it is already fully valid Zefania, avoid redundant conversion
-  if (doc.querySelector('XMLBIBLE') && doc.querySelector('BIBLEBOOK') && doc.querySelector('CHAPTER') && doc.querySelector('VERS')) {
-    return xmlText;
-  }
+  const getElements = (node: Element | Document, names: string[]) => {
+      const lowerNames = names.map(n => n.toLowerCase());
+      return Array.from(node.querySelectorAll('*')).filter(el => lowerNames.includes(el.tagName.toLowerCase()));
+  };
+
+  const getAttr = (el: Element, names: string[]) => {
+      const lowerNames = names.map(n => n.toLowerCase());
+      const attr = Array.from(el.attributes).find(a => lowerNames.includes(a.name.toLowerCase()));
+      return attr ? attr.value : null;
+  };
 
   // Generic processing for all known book, chapter, and verse tags
-  const bookElements = Array.from(doc.querySelectorAll('book, b, BIBLEBOOK, div[type="book"]'));
+  const bookElements = getElements(doc, ['book', 'b', 'biblebook']).concat(
+      getElements(doc, ['div']).filter(el => (getAttr(el, ['type']) || '').toLowerCase() === 'book')
+  );
   
   if (bookElements.length > 0) {
     let resultXml = '<?xml version="1.0" encoding="UTF-8"?>\n<XMLBIBLE>\n';
     
     for (const book of bookElements) {
-       let bname = book.getAttribute('n') || book.getAttribute('N') || book.getAttribute('name') || book.getAttribute('bname') || book.getAttribute('id') || book.getAttribute('osisID') || '';
+       let bname = getAttr(book, ['n', 'name', 'bname', 'id', 'osisid']) || '';
        
-       if (!bname && book.hasAttribute('number')) {
-          const bookNum = parseInt(book.getAttribute('number') || '0', 10);
+       if (!bname && getAttr(book, ['number'])) {
+          const bookNum = parseInt(getAttr(book, ['number']) || '0', 10);
           bname = STANDARD_BOOK_NAMES[bookNum - 1] || `Book ${bookNum}`;
        }
        
        resultXml += `  <BIBLEBOOK bname="${bname}">\n`;
        
-       const chapters = Array.from(book.querySelectorAll('chapter, c, CHAPTER, div[type="chapter"]'));
+       const chapters = getElements(book, ['chapter', 'c']).concat(
+           getElements(book, ['div']).filter(el => (getAttr(el, ['type']) || '').toLowerCase() === 'chapter')
+       );
        for (const chapter of chapters) {
-          const chapNum = chapter.getAttribute('n') || chapter.getAttribute('N') || chapter.getAttribute('number') || chapter.getAttribute('cnumber') || chapter.getAttribute('id') || chapter.getAttribute('osisID') || '0';
+          const chapNum = getAttr(chapter, ['n', 'number', 'cnumber', 'id', 'osisid']) || '0';
           resultXml += `    <CHAPTER cnumber="${chapNum}">\n`;
           
-          const verses = Array.from(chapter.querySelectorAll('verse, v, VERS'));
+          const verses = getElements(chapter, ['verse', 'v', 'vers']);
           for (const verse of verses) {
-             const verseNum = verse.getAttribute('n') || verse.getAttribute('N') || verse.getAttribute('number') || verse.getAttribute('vnumber') || verse.getAttribute('id') || verse.getAttribute('osisID') || '0';
+             const verseNum = getAttr(verse, ['n', 'number', 'vnumber', 'id', 'osisid']) || '0';
              let inner = '';
              for (const child of Array.from(verse.childNodes)) {
                 inner += new XMLSerializer().serializeToString(child);
