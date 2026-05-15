@@ -1,0 +1,8 @@
+{
+  "name": "FlowShow Web",
+  "description": "Web-based presentation software for lyrics, scriptures, and media with audio detection.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
